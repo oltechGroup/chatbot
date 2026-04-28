@@ -58,7 +58,7 @@ const actualizarVisitante = async (req, res) => {
         if (telefono || email) {
             try {
                 // 1. Calculamos la ruta exacta desde el backend hasta tu carpeta public del frontend
-                const logoPath = path.join(__dirname, '../../frontend/public/images/logo_omma.png');
+                const logoPath = path.join(__dirname, '../../frontend/public/images/logo_omma_blanco');
 
                 const mailOptions = {
                     from: `"OMMA Assist VIP" <${process.env.EMAIL_USER}>`,
