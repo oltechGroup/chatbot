@@ -16,7 +16,7 @@ export const chatbotService = {
     return response.data;
   },
 
-  // 2. Segundo paso: Actualizar país, CP, Ciudad Y LOS NUEVOS CAMPOS (Teléfono, Email, Comentario)
+  // 2. Segundo paso: Actualizar país, CP, Ciudad Y LOS NUEVOS CAMPOS
   actualizarDatos: async (id: number, datos: { 
     pais?: string; 
     codigo_postal?: string; 
@@ -52,7 +52,7 @@ export const chatbotService = {
   },
 };
 
-// --- NUEVA ZONA VIP: SERVICIOS DE ADMINISTRACIÓN ---
+// --- ZONA VIP: SERVICIOS DE ADMINISTRACIÓN ---
 export const adminService = {
   // 1. Iniciar sesión y obtener el Token de seguridad (JWT)
   login: async (username: string, password: string) => {
@@ -64,7 +64,16 @@ export const adminService = {
   getStats: async (token: string) => {
     const response = await api.get('/admin/stats', {
       headers: {
-        // Adjuntamos tu credencial de acceso en la cabecera de la petición
+        Authorization: `Bearer ${token}`
+      }
+    });
+    return response.data;
+  },
+
+  // 3. Obtener la lista maestra detallada de leads e interacciones (¡NUEVO!)
+  getLeadsDetails: async (token: string) => {
+    const response = await api.get('/admin/leads', {
+      headers: {
         Authorization: `Bearer ${token}`
       }
     });

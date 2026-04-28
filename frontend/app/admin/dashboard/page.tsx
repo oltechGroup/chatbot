@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { Users, FileDown, MapPin, LogOut, Loader2, BarChart3, LayoutDashboard } from 'lucide-react';
+import { Users, FileDown, MapPin, LogOut, Loader2, BarChart3, LayoutDashboard, ListOrdered } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { adminService } from '../../services/api';
 
@@ -14,23 +14,19 @@ export default function Dashboard() {
   const [stats, setStats] = useState<any>(null);
 
   useEffect(() => {
-    // 1. Verificamos si el usuario tiene la "llave" (token)
     const token = sessionStorage.getItem('omma_admin_token');
     
     if (!token) {
-      // Si no tiene token, lo regresamos al login como medida de seguridad
       router.push('/admin/login');
       return;
     }
 
-    // 2. Si tiene token, traemos los datos reales del Backend
     const fetchStats = async () => {
       try {
         const data = await adminService.getStats(token);
         setStats(data);
       } catch (error) {
         console.error("Error al obtener estadísticas", error);
-        // Si el token expiró o es inválido, lo sacamos
         sessionStorage.removeItem('omma_admin_token');
         router.push('/admin/login');
       } finally {
@@ -55,7 +51,7 @@ export default function Dashboard() {
     );
   }
 
-  // Cálculos para las barras de progreso
+  // Cálculos corregidos respetando el camelCase exacto del backend
   const maxDescargas = stats?.productosMasBuscados?.length 
     ? Math.max(...stats.productosMasBuscados.map((p: any) => Number(p.total))) 
     : 1;
@@ -66,9 +62,10 @@ export default function Dashboard() {
 
   return (
     <main className="min-h-screen bg-[#F8FAFC] font-sans pb-12">
-      {/* BARRA DE NAVEGACIÓN SUPERIOR */}
+      {/* BARRA DE NAVEGACIÓN SUPERIOR CON MENÚ */}
       <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+          
           <div className="flex items-center gap-6">
             <div className="relative w-[150px] h-[45px] md:w-[180px] md:h-[50px]">
               <Image 
@@ -80,11 +77,22 @@ export default function Dashboard() {
                 className="object-contain object-left" 
               />
             </div>
-            <div className="hidden md:flex items-center gap-2 text-sm font-semibold text-gray-400 border-l border-gray-200 pl-6">
-              <LayoutDashboard size={18} />
-              Panel de Administración
+            
+            {/* ENLACES DE NAVEGACIÓN DEL ADMIN */}
+            <div className="hidden md:flex items-center gap-6 border-l border-gray-200 pl-6">
+              <button className="flex items-center gap-2 text-sm font-bold text-[#0B162C] bg-slate-100 px-3 py-1.5 rounded-lg">
+                <LayoutDashboard size={18} /> Resumen General
+              </button>
+              {/* Este botón nos llevará a la nueva página que me pediste */}
+              <button 
+                onClick={() => router.push('/admin/leads')}
+                className="flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-[#0B162C] transition-colors"
+              >
+                <ListOrdered size={18} /> Registro Detallado
+              </button>
             </div>
           </div>
+
           <button 
             onClick={handleLogout}
             className="flex items-center gap-2 text-sm font-bold text-red-500 hover:text-red-700 hover:bg-red-50 px-4 py-2 rounded-lg transition-colors"
@@ -106,7 +114,8 @@ export default function Dashboard() {
             <p className="text-blue-200 font-semibold uppercase tracking-wider text-sm mb-2 relative z-10 flex items-center gap-2">
               <Users size={18} /> Total de Leads Captados
             </p>
-            <h2 className="text-6xl md:text-7xl font-black relative z-10">{stats?.totalleads || 0}</h2>
+            {/* Corrección camelCase: totalLeads en lugar de totalleads */}
+            <h2 className="text-6xl md:text-7xl font-black relative z-10">{stats?.totalLeads || 0}</h2>
             <p className="text-gray-300 mt-2 relative z-10 text-sm">Doctores registrados en el sistema.</p>
           </div>
         </motion.div>
@@ -114,7 +123,7 @@ export default function Dashboard() {
         {/* GRÁFICAS DE DOS COLUMNAS */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           
-          {/* COLUMNA 1: DESCAGAS DE CATÁLOGOS */}
+          {/* COLUMNA 1: DESCARGAS DE CATÁLOGOS */}
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100">
             <div className="flex items-center gap-3 mb-6">
               <div className="bg-blue-50 text-blue-600 p-3 rounded-xl">
@@ -124,8 +133,9 @@ export default function Dashboard() {
             </div>
             
             <div className="space-y-5">
-              {stats?.productosmasbuscados?.length > 0 ? (
-                stats.productosmasbuscados.map((prod: any, idx: number) => (
+              {/* Corrección camelCase: productosMasBuscados */}
+              {stats?.productosMasBuscados?.length > 0 ? (
+                stats.productosMasBuscados.map((prod: any, idx: number) => (
                   <div key={idx} className="relative">
                     <div className="flex justify-between text-sm font-semibold mb-1.5">
                       <span className="text-gray-700 truncate pr-4">{prod.nombre}</span>
@@ -157,8 +167,9 @@ export default function Dashboard() {
             </div>
 
             <div className="space-y-5">
-              {stats?.ubicaciongeografica?.length > 0 ? (
-                stats.ubicaciongeografica.map((loc: any, idx: number) => (
+              {/* Corrección camelCase: ubicacionGeografica */}
+              {stats?.ubicacionGeografica?.length > 0 ? (
+                stats.ubicacionGeografica.map((loc: any, idx: number) => (
                   <div key={idx} className="relative">
                     <div className="flex justify-between text-sm font-semibold mb-1.5">
                       <span className="text-gray-700 truncate pr-4">{loc.pais || 'No especificado'}</span>

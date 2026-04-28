@@ -31,4 +31,35 @@ const getDashboardStats = async (req, res) => {
     }
 };
 
-module.exports = { getDashboardStats };
+// NUEVA FUNCIÓN: Obtener detalles específicos de cada lead (La tabla maestra)
+const getLeadsDetails = async (req, res) => {
+    try {
+        // Hacemos un JOIN para unir al visitante con la interacción y el nombre del catálogo
+        const result = await pool.query(`
+            SELECT 
+                v.id as visitante_id,
+                v.nombre as visitante_nombre,
+                v.pais,
+                v.ciudad,
+                v.telefono,
+                v.email,
+                v.comentario,
+                v.fecha_registro,
+                s.nombre as producto_descargado,
+                i.fecha_interaccion,
+                i.tipo_accion
+            FROM visitantes v
+            LEFT JOIN interacciones i ON v.id = i.visitante_id
+            LEFT JOIN subcategorias s ON i.subcategoria_id = s.id
+            ORDER BY v.fecha_registro DESC
+        `);
+        
+        res.json(result.rows);
+    } catch (error) {
+        console.error("Error al obtener detalle de leads:", error);
+        res.status(500).json({ error: "Error al obtener detalles" });
+    }
+};
+
+// Exportamos AMBAS funciones para que el router deje de dar error
+module.exports = { getDashboardStats, getLeadsDetails };

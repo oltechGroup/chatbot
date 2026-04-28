@@ -7,7 +7,10 @@ const statsController = require('../controllers/statsController');
 // Ruta pública para loguearse
 router.post('/login', authController.login);
 
-// Ruta para las gráficas (Aquí podrías añadir un middleware de seguridad después)
+// Ruta para las gráficas (Resumen General)
 router.get('/stats', statsController.getDashboardStats);
+
+// NUEVA RUTA: Para la tabla detallada de doctores e interacciones
+router.get('/leads', statsController.getLeadsDetails);
 
 module.exports = router;

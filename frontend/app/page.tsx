@@ -3,7 +3,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
-import { SendHorizonal, BotMessageSquare, User, MoreHorizontal, ChevronRight, FileDown, FileText, Download, MessageCircle } from 'lucide-react';
+import { SendHorizonal, BotMessageSquare, User, MoreHorizontal, ChevronRight, FileDown, FileText, Download, MessageCircle, CalendarClock, PhoneCall, CalendarPlus } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { chatbotService } from './services/api';
 
@@ -15,7 +15,7 @@ type Message = {
   optionsType?: 'categorias' | 'subcategorias' | 'tipoContacto' | 'explorarMas' | 'feedbackOpcion';
   optionsData?: any[];
   isFileCard?: boolean;
-  fileData?: { nombre: string; url?: string }; // Añadimos la URL del archivo
+  fileData?: { nombre: string; url?: string };
 };
 
 export default function Home() {
@@ -40,15 +40,27 @@ export default function Home() {
     setIsTyping(true);
     setStep(6); 
     try {
-      const categorias = await chatbotService.obtenerCategorias();
+      // Traemos las categorías médicas de la BD
+      const categoriasBd = await chatbotService.obtenerCategorias();
+      
+      // Creamos las opciones especiales de agendamiento
+      const opcionesEspeciales = [
+        { id: 'AGENDAR_TALLER', nombre: 'Agendar para un taller', isEspecial: true, icon: CalendarPlus },
+        { id: 'AGENDAR_CITA', nombre: 'Agendar una cita', isEspecial: true, icon: CalendarClock },
+        { id: 'SOPORTE_TELEFONICO', nombre: 'Soporte telefónico', isEspecial: true, icon: PhoneCall }
+      ];
+
+      // Fusionamos ambas listas (Médicas arriba, Especiales abajo)
+      const menuCompleto = [...categoriasBd, ...opcionesEspeciales];
+
       setTimeout(() => {
         setMessages(prev => [...prev, { 
           id: Date.now(), 
           sender: 'bot', 
-          text: '¿Qué área de especialidad te gustaría explorar hoy?',
+          text: '¿Qué área de especialidad te gustaría explorar hoy, o necesitas atención personalizada?',
           isOptions: true,
           optionsType: 'categorias',
-          optionsData: categorias
+          optionsData: menuCompleto
         }]);
         setIsTyping(false);
       }, 1000);
@@ -144,29 +156,69 @@ export default function Home() {
   };
 
   const handleOptionClick = async (tipo: string, data: any) => {
+    
+    // --- LÓGICA DE MENÚ PRINCIPAL ---
     if (tipo === 'categorias') {
       setMessages(prev => [...prev, { id: Date.now(), sender: 'user', text: data.nombre }]);
       setIsTyping(true);
-      setStep(7); 
-      try {
-        const subcategorias = await chatbotService.obtenerSubcategorias(data.id);
-        setTimeout(() => {
-          setMessages(prev => [...prev, { 
-            id: Date.now(), 
-            sender: 'bot', 
-            text: `Soluciones para **${data.nombre}**. Selecciona el catálogo que deseas descargar:`,
-            isOptions: true,
-            optionsType: 'subcategorias',
-            optionsData: subcategorias
-          }]);
+      
+      // 1. SI ES UNA OPCIÓN DE AGENDAMIENTO ESPECIAL
+      if (data.isEspecial) {
+        setStep(8); // Lo mandamos directo a la pregunta de "Explorar Más"
+        try {
+          // Mandamos la acción a la BD con subcategoria_id en null
+          if (visitanteId) {
+             await chatbotService.registrarInteraccion(visitanteId, null as any, data.id);
+          }
+          
+          setTimeout(() => {
+            setMessages(prev => [...prev, { 
+              id: Date.now(), 
+              sender: 'bot', 
+              text: `✅ ¡Solicitud recibida! En breve, uno de nuestros especialistas se pondrá en contacto contigo para coordinar tu petición de **${data.nombre.toLowerCase()}**.` 
+            }]);
+            
+            setTimeout(() => {
+              setMessages(prev => [...prev, { 
+                id: Date.now(), 
+                sender: 'bot', 
+                text: `Mientras tanto, ¿te gustaría explorar nuestra área de productos?`,
+                isOptions: true,
+                optionsType: 'explorarMas',
+                optionsData: [{ id: 'si', nombre: 'Sí, explorar productos' }, { id: 'no', nombre: 'No por el momento' }]
+              }]);
+              setIsTyping(false);
+            }, 2000);
+          }, 1000);
+        } catch (error) {
+          console.error(error);
           setIsTyping(false);
-        }, 1000);
-      } catch (error) {
-        console.error(error);
-        setIsTyping(false);
+        }
+      } 
+      // 2. SI ES UNA CATEGORÍA MÉDICA NORMAL
+      else {
+        setStep(7); 
+        try {
+          const subcategorias = await chatbotService.obtenerSubcategorias(data.id);
+          setTimeout(() => {
+            setMessages(prev => [...prev, { 
+              id: Date.now(), 
+              sender: 'bot', 
+              text: `Soluciones para **${data.nombre}**. Selecciona el catálogo que deseas descargar:`,
+              isOptions: true,
+              optionsType: 'subcategorias',
+              optionsData: subcategorias
+            }]);
+            setIsTyping(false);
+          }, 1000);
+        } catch (error) {
+          console.error(error);
+          setIsTyping(false);
+        }
       }
     } 
     
+    // --- LÓGICA DE DESCARGA DE PDF ---
     else if (tipo === 'subcategorias') {
       setMessages(prev => [...prev, { id: Date.now(), sender: 'user', text: `Descargar: ${data.nombre}` }]);
       setIsTyping(true);
@@ -181,7 +233,6 @@ export default function Home() {
               sender: 'bot', 
               text: '', 
               isFileCard: true, 
-              // Aquí pasamos la URL real que viene de la base de datos
               fileData: { nombre: data.nombre, url: data.url_catalogo } 
             }]);
             setTimeout(() => {
@@ -288,7 +339,6 @@ export default function Home() {
                   
                   {msg.isFileCard ? (
                     <div className="flex items-end gap-3 flex-row ml-11">
-                      {/* Convertimos la tarjeta en un enlace real (etiqueta <a>) para descargar o abrir el PDF */}
                       <a 
                         href={msg.fileData?.url || "#"} 
                         target="_blank" 
@@ -320,21 +370,26 @@ export default function Home() {
 
                   {msg.isOptions && msg.optionsData && (
                     <div className="ml-11 mt-2 flex flex-col gap-2 w-[85%] md:w-[60%]">
-                      {msg.optionsData.map((opt: any) => (
-                        <button
-                          key={opt.id}
-                          onClick={() => handleOptionClick(msg.optionsType!, opt)}
-                          className={`flex items-center justify-between w-full p-3 md:p-4 bg-white border rounded-xl transition-all shadow-sm text-sm md:text-base text-left group
-                            ${['feedbackOpcion', 'explorarMas', 'tipoContacto'].includes(msg.optionsType!) 
-                              ? 'border-[#0B162C]/20 text-[#0B162C] hover:bg-slate-100' 
-                              : 'border-[#0B162C]/20 hover:bg-[#0B162C] hover:text-white text-[#0B162C]'
-                            }`}
-                        >
-                          <span className="font-semibold">{opt.nombre}</span>
-                          {msg.optionsType === 'categorias' && <ChevronRight size={18} className="text-[#0B162C]/50 group-hover:text-white transition-colors" />}
-                          {msg.optionsType === 'subcategorias' && <FileDown size={18} className="text-[#0B162C]/50 group-hover:text-white transition-colors" />}
-                        </button>
-                      ))}
+                      {msg.optionsData.map((opt: any) => {
+                        // Renderizado dinámico de iconos
+                        const IconComponent = opt.icon ? opt.icon : (msg.optionsType === 'categorias' ? ChevronRight : FileDown);
+                        
+                        return (
+                          <button
+                            key={opt.id}
+                            onClick={() => handleOptionClick(msg.optionsType!, opt)}
+                            className={`flex items-center justify-between w-full p-3 md:p-4 bg-white border rounded-xl transition-all shadow-sm text-sm md:text-base text-left group
+                              ${opt.isEspecial ? 'border-blue-200 text-blue-700 bg-blue-50/30 hover:bg-blue-600 hover:text-white hover:border-transparent' : 
+                                ['feedbackOpcion', 'explorarMas', 'tipoContacto'].includes(msg.optionsType!) 
+                                ? 'border-[#0B162C]/20 text-[#0B162C] hover:bg-slate-100' 
+                                : 'border-[#0B162C]/20 hover:bg-[#0B162C] hover:text-white text-[#0B162C]'
+                              }`}
+                          >
+                            <span className="font-semibold">{opt.nombre}</span>
+                            <IconComponent size={18} className={`${opt.isEspecial ? 'text-blue-500 group-hover:text-white' : 'text-[#0B162C]/50 group-hover:text-white'} transition-colors`} />
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
                 </motion.div>
@@ -357,7 +412,6 @@ export default function Home() {
           {/* BARRA PERMANENTE DE WHATSAPP Y ENTRADA DE TEXTO */}
           <div className="bg-white z-10 flex flex-col">
             
-            {/* Banner de Contacto visible a partir del paso 6 (Cuando ya terminó su registro) */}
             {step >= 6 && (
               <div className="bg-green-50 border-y border-green-100 py-2.5 px-4 flex items-center justify-between">
                 <span className="text-[11px] md:text-xs text-green-800 font-semibold flex items-center gap-1.5 uppercase tracking-wide">
@@ -374,7 +428,6 @@ export default function Home() {
               </div>
             )}
 
-            {/* Input de Texto */}
             <div className="p-4 border-t border-gray-100">
               <div className={`flex items-center gap-3 p-1.5 rounded-full border transition-all shadow-inner 
                 ${isInputDisabled ? 'bg-gray-50 border-transparent' : 'bg-slate-100 border-transparent focus-within:border-[#0B162C] focus-within:bg-white'}`}>
