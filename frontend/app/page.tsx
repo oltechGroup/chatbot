@@ -29,6 +29,11 @@ export default function Home() {
   const [visitanteId, setVisitanteId] = useState<number | null>(null);
   
   const [tipoContactoSeleccionado, setTipoContactoSeleccionado] = useState<'telefono' | 'email' | null>(null);
+  
+  // NUEVO: Memoria para saber si tenemos cómo contactarlo
+  const [tieneDatosContacto, setTieneDatosContacto] = useState<boolean>(false);
+  // NUEVO: Memoria para guardar la solicitud pendiente mientras pedimos el contacto
+  const [solicitudPendiente, setSolicitudPendiente] = useState<any | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -40,17 +45,14 @@ export default function Home() {
     setIsTyping(true);
     setStep(6); 
     try {
-      // Traemos las categorías médicas de la BD
       const categoriasBd = await chatbotService.obtenerCategorias();
       
-      // Creamos las opciones especiales de agendamiento
       const opcionesEspeciales = [
         { id: 'AGENDAR_TALLER', nombre: 'Agendar para un taller', isEspecial: true, icon: CalendarPlus },
         { id: 'AGENDAR_CITA', nombre: 'Agendar una cita', isEspecial: true, icon: CalendarClock },
         { id: 'SOPORTE_TELEFONICO', nombre: 'Soporte telefónico', isEspecial: true, icon: PhoneCall }
       ];
 
-      // Fusionamos ambas listas (Médicas arriba, Especiales abajo)
       const menuCompleto = [...categoriasBd, ...opcionesEspeciales];
 
       setTimeout(() => {
@@ -117,12 +119,50 @@ export default function Home() {
           } else {
             await chatbotService.actualizarDatos(visitanteId, { telefono: userText });
           }
+          // Acaba de darnos sus datos, prendemos la bandera verde
+          setTieneDatosContacto(true); 
         }
         setTimeout(() => {
           setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: `¡Registro completado exitosamente! 🎉` }]);
           fetchCategorias();
         }, 1000);
-      } else if (step === 10) {
+      } 
+      
+      // NUEVO PASO INTERMEDIO: Si le pedimos el dato a la fuerza porque quería una asesoría
+      else if (step === 99 && solicitudPendiente) {
+        // Asumimos que lo que escribió es un correo si tiene '@', si no, es teléfono
+        const datoEnviado = userText.includes('@') ? { email: userText } : { telefono: userText };
+        
+        if (visitanteId) {
+          await chatbotService.actualizarDatos(visitanteId, datoEnviado);
+          await chatbotService.registrarInteraccion(visitanteId, null as any, solicitudPendiente.id);
+        }
+        
+        setTieneDatosContacto(true);
+        setStep(8); // Lo mandamos a la pregunta de "Explorar Más"
+        
+        setTimeout(() => {
+          setMessages(prev => [...prev, { 
+            id: Date.now(), 
+            sender: 'bot', 
+            text: `¡Perfecto, ya lo tengo guardado! ✅ En breve, uno de nuestros especialistas te contactará para coordinar tu **${solicitudPendiente.nombre.toLowerCase()}**.` 
+          }]);
+          
+          setTimeout(() => {
+            setMessages(prev => [...prev, { 
+              id: Date.now(), 
+              sender: 'bot', 
+              text: `Mientras tanto, ¿te gustaría explorar nuestra área de productos?`,
+              isOptions: true,
+              optionsType: 'explorarMas',
+              optionsData: [{ id: 'si', nombre: 'Sí, explorar productos' }, { id: 'no', nombre: 'No por el momento' }]
+            }]);
+            setIsTyping(false);
+          }, 2000);
+        }, 1000);
+      }
+
+      else if (step === 10) {
         if (visitanteId) await chatbotService.actualizarDatos(visitanteId, { comentario: userText });
         setTimeout(() => {
           setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: `¡Muchas gracias por tus comentarios! Nos ayudan a mejorar. ¡Que tengas un excelente día!` }]);
@@ -157,16 +197,31 @@ export default function Home() {
 
   const handleOptionClick = async (tipo: string, data: any) => {
     
-    // --- LÓGICA DE MENÚ PRINCIPAL ---
     if (tipo === 'categorias') {
       setMessages(prev => [...prev, { id: Date.now(), sender: 'user', text: data.nombre }]);
       setIsTyping(true);
       
-      // 1. SI ES UNA OPCIÓN DE AGENDAMIENTO ESPECIAL
       if (data.isEspecial) {
-        setStep(8); // Lo mandamos directo a la pregunta de "Explorar Más"
+        
+        // --- FILTRO DE SEGURIDAD VIP ---
+        if (!tieneDatosContacto) {
+          // No tiene datos, hacemos el desvío inteligente
+          setSolicitudPendiente(data); // Guardamos lo que quería en la memoria
+          setStep(99); // Estado de rescate de contacto
+          setTimeout(() => {
+            setMessages(prev => [...prev, { 
+              id: Date.now(), 
+              sender: 'bot', 
+              text: `Me encantaría agendar esto para ti, pero veo que no me dejaste un medio de contacto. 😅 ¿Me podrías proporcionar tu número de teléfono  aquí abajo?` 
+            }]);
+            setIsTyping(false);
+          }, 1000);
+          return; // Detenemos la ejecución aquí
+        }
+
+        // Si SÍ tiene datos, sigue el flujo normal
+        setStep(8); 
         try {
-          // Mandamos la acción a la BD con subcategoria_id en null
           if (visitanteId) {
              await chatbotService.registrarInteraccion(visitanteId, null as any, data.id);
           }
@@ -195,7 +250,6 @@ export default function Home() {
           setIsTyping(false);
         }
       } 
-      // 2. SI ES UNA CATEGORÍA MÉDICA NORMAL
       else {
         setStep(7); 
         try {
@@ -218,7 +272,6 @@ export default function Home() {
       }
     } 
     
-    // --- LÓGICA DE DESCARGA DE PDF ---
     else if (tipo === 'subcategorias') {
       setMessages(prev => [...prev, { id: Date.now(), sender: 'user', text: `Descargar: ${data.nombre}` }]);
       setIsTyping(true);
@@ -260,6 +313,7 @@ export default function Home() {
       
       setTimeout(() => {
         if (data.id === 'ninguno') {
+          // NO prendemos la bandera aquí porque eligió "Ninguno"
           setStep(6);
           setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: `¡Entendido! Registro completado exitosamente. 🎉` }]);
           fetchCategorias();
@@ -315,6 +369,7 @@ export default function Home() {
     if (e.key === 'Enter') handleSendMessage();
   };
 
+  // Bloqueamos el input en menús, cuando terminó, O cuando está mostrando el mensaje de rescate de contacto (el usuario tiene que escribir ahí)
   const isInputDisabled = isTyping || [4, 6, 7, 8, 9, 11].includes(step);
 
   return (
@@ -368,10 +423,10 @@ export default function Home() {
                     </div>
                   )}
 
-                  {msg.isOptions && msg.optionsData && (
+                  {/* IMPORTANTE: Los botones se ocultan si el bot está haciendo una pregunta forzada (step 99) */}
+                  {msg.isOptions && msg.optionsData && step !== 99 && (
                     <div className="ml-11 mt-2 flex flex-col gap-2 w-[85%] md:w-[60%]">
                       {msg.optionsData.map((opt: any) => {
-                        // Renderizado dinámico de iconos
                         const IconComponent = opt.icon ? opt.icon : (msg.optionsType === 'categorias' ? ChevronRight : FileDown);
                         
                         return (
@@ -409,7 +464,6 @@ export default function Home() {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* BARRA PERMANENTE DE WHATSAPP Y ENTRADA DE TEXTO */}
           <div className="bg-white z-10 flex flex-col">
             
             {step >= 6 && (
