@@ -28,7 +28,6 @@ export default function Home() {
   const [step, setStep] = useState(0); 
   const [visitanteId, setVisitanteId] = useState<number | null>(null);
   
-  // NUEVO: Variables temporales para el nombre completo
   const [nombresTemp, setNombresTemp] = useState('');
 
   const [tipoContactoSeleccionado, setTipoContactoSeleccionado] = useState<'telefono' | 'email' | null>(null);
@@ -42,7 +41,6 @@ export default function Home() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isTyping]);
 
-  // Función para formatear el texto y convertir **negritas** a <strong>HTML</strong>
   const renderFormattedText = (text: string) => {
     const parts = text.split(/(\*\*.*?\*\*)/g);
     return parts.map((part, index) => {
@@ -53,14 +51,12 @@ export default function Home() {
     });
   };
 
-  // Funciones de validación
   const isValidEmail = (email: string) => {
     const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return regex.test(email);
   };
 
   const isValidPhone = (phone: string) => {
-    // Busca al menos 10 números en el string (permite espacios, guiones o símbolos como +)
     const numbersOnly = phone.replace(/\D/g, '');
     return numbersOnly.length >= 10;
   };
@@ -105,17 +101,15 @@ export default function Home() {
     setIsTyping(true);
 
     try {
-      // --- PASO 0: Guardamos Nombres Temporalmente ---
       if (step === 0) {
         setNombresTemp(userText);
-        setStep(0.5); // Medio paso para pedir apellidos
+        setStep(0.5); 
         setTimeout(() => {
           setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: `Perfecto. Ahora, ¿me podrías proporcionar tus apellidos?` }]);
           setIsTyping(false);
         }, 1000);
       } 
       
-      // --- PASO 0.5: Juntamos y Mandamos a BD ---
       else if (step === 0.5) {
         const nombreCompleto = `${nombresTemp} ${userText}`;
         const response = await chatbotService.registrarNombre(nombreCompleto);
@@ -157,14 +151,13 @@ export default function Home() {
       } 
       
       else if (step === 5) {
-        // --- VALIDACIONES DE CONTACTO NORMAL ---
         if (tipoContactoSeleccionado === 'email') {
           if (!isValidEmail(userText)) {
             setTimeout(() => {
               setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: `Ese formato no parece un correo electrónico válido. 😅 Por favor, inténtalo de nuevo (ejemplo: correo@dominio.com):` }]);
               setIsTyping(false);
             }, 1000);
-            return; // Detenemos aquí
+            return; 
           }
           if (visitanteId) await chatbotService.actualizarDatos(visitanteId, { email: userText });
         } 
@@ -174,7 +167,7 @@ export default function Home() {
               setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: `Ese no parece un número de teléfono válido. 😅 Por favor, ingresa al menos 10 dígitos:` }]);
               setIsTyping(false);
             }, 1000);
-            return; // Detenemos aquí
+            return; 
           }
           if (visitanteId) await chatbotService.actualizarDatos(visitanteId, { telefono: userText });
         }
@@ -186,37 +179,31 @@ export default function Home() {
         }, 1000);
       } 
       
-      // --- PASO 99: RESCATE DE CONTACTO (Filtro Estricto) ---
       else if (step === 99 && solicitudPendiente) {
         const isEmail = userText.includes('@');
         let isValid = false;
         let mensajeError = "";
 
-        // Si intentan evadir (escriben no, despues, etc) o la entrada es muy corta
         if (userText.toLowerCase() === 'no' || userText.length < 5) {
            mensajeError = `Entiendo, pero para procesar tu solicitud de **${solicitudPendiente.nombre.toLowerCase()}** es indispensable contar con un medio de contacto. ¿Podrías brindarme un teléfono o correo?`;
         } 
-        // Verificamos si parece correo
         else if (isEmail) {
            isValid = isValidEmail(userText);
            if(!isValid) mensajeError = "Ese correo no parece válido. Por favor, verifica el formato.";
         } 
-        // Verificamos si parece teléfono
         else {
            isValid = isValidPhone(userText);
            if(!isValid) mensajeError = "Ese teléfono no parece válido. Por favor, asegúrate de escribir al menos 10 dígitos.";
         }
 
-        // Si falló la validación
         if (!isValid) {
             setTimeout(() => {
               setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: mensajeError }]);
               setIsTyping(false);
             }, 1000);
-            return; // No avanzamos
+            return; 
         }
 
-        // Si pasó la validación, guardamos
         const datoEnviado = isEmail ? { email: userText } : { telefono: userText };
         
         if (visitanteId) {
@@ -489,8 +476,8 @@ export default function Home() {
     if (e.key === 'Enter') handleSendMessage();
   };
 
-  // Bloqueamos el input en menús, o cuando la conversación finalizó
-  const isInputDisabled = isTyping || [0.5, 4, 6, 7, 8, 9, 11, 12].includes(step);
+  // Se removió el 0.5 de la lista de bloqueo para permitir entrada de texto en el paso de apellidos
+  const isInputDisabled = isTyping || [4, 6, 7, 8, 9, 11, 12].includes(step);
 
   return (
     <main className="flex min-h-screen flex-col bg-[#F8FAFC] text-gray-900 font-sans relative">
@@ -537,7 +524,6 @@ export default function Home() {
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center shadow-md shrink-0 mb-1 ${msg.sender === 'bot' ? 'bg-[#0B162C] text-white' : 'bg-gray-200 text-[#0B162C]'}`}>
                         {msg.sender === 'bot' ? <BotMessageSquare size={16} /> : <User size={16} />}
                       </div>
-                      {/* Aquí aplicamos la función de renderizado para las negritas reales */}
                       <div className={`p-4 md:p-5 rounded-2xl text-[15px] leading-relaxed max-w-[85%] md:max-w-[75%] shadow-sm whitespace-pre-wrap ${msg.sender === 'bot' ? 'bg-white text-[#475569] border border-gray-200 rounded-bl-sm' : 'bg-[#0B162C] text-white rounded-br-sm'}`}>
                         {renderFormattedText(msg.text)}
                       </div>
