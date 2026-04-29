@@ -20,7 +20,7 @@ type Message = {
 
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([
-    { id: 1, sender: 'bot', text: '¡Hola! Bienvenido al asistente virtual de OMMA GROUP. Aquí podrás consultar nuestros catálogos exclusivos y técnicas quirúrgicas para profesionales de la salud.\n\nPara comenzar, ¿Me podrías proporcionar tu(s) nombre(s)?' }
+    { id: 1, sender: 'bot', text: '¡Hola! Bienvenido al asistente virtual de OMMA GROUP. Aquí podrás consultar nuestros catálogos exclusivos y técnicas quirúrgicas para profesionales de la salud.\n\nPara comenzar, ¿me podrías proporcionar tu nombre completo?' }
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -28,8 +28,6 @@ export default function Home() {
   const [step, setStep] = useState(0); 
   const [visitanteId, setVisitanteId] = useState<number | null>(null);
   
-  const [nombresTemp, setNombresTemp] = useState('');
-
   const [tipoContactoSeleccionado, setTipoContactoSeleccionado] = useState<'telefono' | 'email' | null>(null);
   
   const [tieneDatosContacto, setTieneDatosContacto] = useState<boolean>(false);
@@ -101,55 +99,15 @@ export default function Home() {
     setIsTyping(true);
 
     try {
+      // --- PASO 0: Registramos el nombre y pasamos directo a pedir el contacto ---
       if (step === 0) {
-        setNombresTemp(userText);
-        setStep(0.5); 
-        setTimeout(() => {
-          setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: `Perfecto. Ahora, ¿Me podrías proporcionar tus apellidos?` }]);
-          setIsTyping(false);
-        }, 1000);
-      } 
-      
-      else if (step === 0.5) {
-        const nombreCompleto = `${nombresTemp} ${userText}`;
-        const response = await chatbotService.registrarNombre(nombreCompleto);
+        const response = await chatbotService.registrarNombre(userText);
         setVisitanteId(response.visitante.id);
-        setStep(1);
-        setTimeout(() => {
-          setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: `¡Mucho gusto, ${nombresTemp}! Para completar tu registro, ¿De qué país nos visitas?` }]);
-          setIsTyping(false);
-        }, 1000);
+        setStep(4); // El paso 4 es "esperando que seleccione botón de contacto"
+        preguntaContacto(userText);
       } 
       
-      else if (step === 1) {
-        if (visitanteId) await chatbotService.actualizarDatos(visitanteId, { pais: userText });
-        setStep(2);
-        setTimeout(() => {
-          setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: `Gracias. ¿Podrías indicarnos tu Código Postal? (Escribe "No" si lo prefieres)` }]);
-          setIsTyping(false);
-        }, 1000);
-      } 
-      
-      else if (step === 2) {
-        if (userText.toLowerCase().includes('no')) {
-          setStep(3);
-          setTimeout(() => {
-            setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: `No te preocupes, ¿En qué ciudad resides?` }]);
-            setIsTyping(false);
-          }, 1000);
-        } else {
-          if (visitanteId) await chatbotService.actualizarDatos(visitanteId, { codigo_postal: userText });
-          setStep(4);
-          preguntaContacto();
-        }
-      } 
-      
-      else if (step === 3) {
-        if (visitanteId) await chatbotService.actualizarDatos(visitanteId, { ciudad: userText });
-        setStep(4);
-        preguntaContacto();
-      } 
-      
+      // --- PASO 5: Guardamos el teléfono o correo ---
       else if (step === 5) {
         if (tipoContactoSeleccionado === 'email') {
           if (!isValidEmail(userText)) {
@@ -179,6 +137,7 @@ export default function Home() {
         }, 1000);
       } 
       
+      // --- PASO 99: Rescate de contacto si intentó saltarlo ---
       else if (step === 99 && solicitudPendiente) {
         const isEmail = userText.includes('@');
         let isValid = false;
@@ -258,12 +217,12 @@ export default function Home() {
     }
   };
 
-  const preguntaContacto = () => {
+  const preguntaContacto = (nombre: string) => {
     setTimeout(() => {
       setMessages(prev => [...prev, { 
         id: Date.now(), 
         sender: 'bot', 
-        text: `¡Casi listos! Nos gustaría mantenerte al día. ¿Cómo prefieres que te contactemos?`,
+        text: `¡Mucho gusto, ${nombre}! Para enviarte la información solicitada, ¿cómo prefieres que te contactemos?`,
         isOptions: true,
         optionsType: 'tipoContacto',
         optionsData: [
@@ -476,14 +435,14 @@ export default function Home() {
     if (e.key === 'Enter') handleSendMessage();
   };
 
-  // Se removió el 0.5 de la lista de bloqueo para permitir entrada de texto en el paso de apellidos
+  // Bloqueamos el input en menús, o cuando la conversación finalizó
   const isInputDisabled = isTyping || [4, 6, 7, 8, 9, 11, 12].includes(step);
 
   return (
     <main className="flex min-h-screen flex-col bg-[#F8FAFC] text-gray-900 font-sans relative">
       <header className="fixed top-0 left-0 w-full bg-white shadow-sm border-b border-gray-200 z-50 px-4 md:px-8 py-3 flex items-center justify-between">
         <div className="relative w-[200px] h-[60px] md:w-[250px] md:h-[70px]">
-          <Image src="/images/logo_omma.png" alt="OMMA Group Logo" fill priority sizes="(max-width: 768px) 200px, 250px" className="object-contain object-left" />
+          <Image src="/images/logo_omma.png" alt="OMMA Group Logo" fill sizes="(max-width: 768px) 200px, 250px" className="object-contain object-left" />
         </div>
         <div className="flex items-center gap-2">
           <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]"></div>
