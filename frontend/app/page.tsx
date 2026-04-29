@@ -12,7 +12,7 @@ type Message = {
   sender: 'bot' | 'user';
   text: string;
   isOptions?: boolean;
-  optionsType?: 'categorias' | 'subcategorias' | 'tipoContacto' | 'explorarMas' | 'feedbackOpcion';
+  optionsType?: 'categorias' | 'subcategorias' | 'tipoContacto' | 'explorarMas' | 'feedbackOpcion' | 'rifaOpcion';
   optionsData?: any[];
   isFileCard?: boolean;
   fileData?: { nombre: string; url?: string };
@@ -30,9 +30,7 @@ export default function Home() {
   
   const [tipoContactoSeleccionado, setTipoContactoSeleccionado] = useState<'telefono' | 'email' | null>(null);
   
-  // NUEVO: Memoria para saber si tenemos cómo contactarlo
   const [tieneDatosContacto, setTieneDatosContacto] = useState<boolean>(false);
-  // NUEVO: Memoria para guardar la solicitud pendiente mientras pedimos el contacto
   const [solicitudPendiente, setSolicitudPendiente] = useState<any | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -119,7 +117,6 @@ export default function Home() {
           } else {
             await chatbotService.actualizarDatos(visitanteId, { telefono: userText });
           }
-          // Acaba de darnos sus datos, prendemos la bandera verde
           setTieneDatosContacto(true); 
         }
         setTimeout(() => {
@@ -128,9 +125,7 @@ export default function Home() {
         }, 1000);
       } 
       
-      // NUEVO PASO INTERMEDIO: Si le pedimos el dato a la fuerza porque quería una asesoría
       else if (step === 99 && solicitudPendiente) {
-        // Asumimos que lo que escribió es un correo si tiene '@', si no, es teléfono
         const datoEnviado = userText.includes('@') ? { email: userText } : { telefono: userText };
         
         if (visitanteId) {
@@ -139,7 +134,7 @@ export default function Home() {
         }
         
         setTieneDatosContacto(true);
-        setStep(8); // Lo mandamos a la pregunta de "Explorar Más"
+        setStep(8);
         
         setTimeout(() => {
           setMessages(prev => [...prev, { 
@@ -164,9 +159,17 @@ export default function Home() {
 
       else if (step === 10) {
         if (visitanteId) await chatbotService.actualizarDatos(visitanteId, { comentario: userText });
+        
+        setStep(11); // Vamos a la pregunta de la Rifa
         setTimeout(() => {
-          setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: `¡Muchas gracias por tus comentarios! Nos ayudan a mejorar. ¡Que tengas un excelente día!` }]);
-          setStep(11);
+          setMessages(prev => [...prev, { 
+            id: Date.now(), 
+            sender: 'bot', 
+            text: `¡Muchas gracias por tus comentarios! Nos ayudan a mejorar.\n\nPor cierto, queremos recordarte que realizaremos una gran rifa durante el congreso. 🎁 ¿Te interesa conocer los días y horarios para participar?`,
+            isOptions: true,
+            optionsType: 'rifaOpcion',
+            optionsData: [{ id: 'si', nombre: 'Sí, me interesa' }, { id: 'no', nombre: 'No, gracias' }]
+          }]);
           setIsTyping(false);
         }, 1000);
       }
@@ -202,24 +205,20 @@ export default function Home() {
       setIsTyping(true);
       
       if (data.isEspecial) {
-        
-        // --- FILTRO DE SEGURIDAD VIP ---
         if (!tieneDatosContacto) {
-          // No tiene datos, hacemos el desvío inteligente
-          setSolicitudPendiente(data); // Guardamos lo que quería en la memoria
-          setStep(99); // Estado de rescate de contacto
+          setSolicitudPendiente(data); 
+          setStep(99); 
           setTimeout(() => {
             setMessages(prev => [...prev, { 
               id: Date.now(), 
               sender: 'bot', 
-              text: `Me encantaría agendar esto para ti, pero veo que no me dejaste un medio de contacto. 😅 ¿Me podrías proporcionar tu número de teléfono  aquí abajo?` 
+              text: `Me encantaría agendar esto para ti, pero veo que no me dejaste un medio de contacto. 😅 ¿Me podrías proporcionar tu número de teléfono o correo electrónico aquí abajo?` 
             }]);
             setIsTyping(false);
           }, 1000);
-          return; // Detenemos la ejecución aquí
+          return; 
         }
 
-        // Si SÍ tiene datos, sigue el flujo normal
         setStep(8); 
         try {
           if (visitanteId) {
@@ -313,7 +312,6 @@ export default function Home() {
       
       setTimeout(() => {
         if (data.id === 'ninguno') {
-          // NO prendemos la bandera aquí porque eligió "Ninguno"
           setStep(6);
           setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: `¡Entendido! Registro completado exitosamente. 🎉` }]);
           fetchCategorias();
@@ -357,8 +355,40 @@ export default function Home() {
           setStep(10);
           setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: `Por favor, escribe tu comentario general aquí:` }]);
         } else {
-          setStep(11);
-          setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: `¡De acuerdo! Muchas gracias por visitarnos en el congreso. ¡Que tengas un excelente día!` }]);
+          setStep(11); // Vamos a la pregunta de la Rifa
+          setMessages(prev => [...prev, { 
+            id: Date.now(), 
+            sender: 'bot', 
+            text: `¡Entendido!\n\nAntes de irte, queremos recordarte que realizaremos una gran rifa durante el congreso. 🎁 ¿Te interesa conocer los días y horarios para participar?`,
+            isOptions: true,
+            optionsType: 'rifaOpcion',
+            optionsData: [{ id: 'si', nombre: 'Sí, me interesa' }, { id: 'no', nombre: 'No, gracias' }]
+          }]);
+        }
+        setIsTyping(false);
+      }, 1000);
+    }
+
+    // --- NUEVO: LÓGICA DE LA RIFA ---
+    else if (tipo === 'rifaOpcion') {
+      setMessages(prev => [...prev, { id: Date.now(), sender: 'user', text: data.nombre }]);
+      setIsTyping(true);
+
+      setTimeout(() => {
+        setStep(12); // Fin absoluto de la conversación
+        
+        if (data.id === 'si') {
+          setMessages(prev => [...prev, { 
+            id: Date.now(), 
+            sender: 'bot', 
+            text: `¡Excelente! Los sorteos se realizarán en la zona de receso en los siguientes horarios:\n\n📅 **29 abril de 2026**: 15:45 - 16:30\n📅 **30 abril de 2026**: 13:45 - 14:00\n📅 **01 de mayo de 2026**: 12:45 - 13:15\n📅 **02 de mayo de 2026**: 13:15 - 14:00\n\n¡Te esperamos! Que tengas un excelente día.` 
+          }]);
+        } else {
+          setMessages(prev => [...prev, { 
+            id: Date.now(), 
+            sender: 'bot', 
+            text: `¡No hay problema! Muchas gracias por visitarnos en el congreso. ¡Que tengas un excelente día!` 
+          }]);
         }
         setIsTyping(false);
       }, 1000);
@@ -369,8 +399,8 @@ export default function Home() {
     if (e.key === 'Enter') handleSendMessage();
   };
 
-  // Bloqueamos el input en menús, cuando terminó, O cuando está mostrando el mensaje de rescate de contacto (el usuario tiene que escribir ahí)
-  const isInputDisabled = isTyping || [4, 6, 7, 8, 9, 11].includes(step);
+  // Bloqueamos el input en menús, cuando terminó (12), o cuando es la pregunta de la rifa (11)
+  const isInputDisabled = isTyping || [4, 6, 7, 8, 9, 11, 12].includes(step);
 
   return (
     <main className="flex min-h-screen flex-col bg-[#F8FAFC] text-gray-900 font-sans relative">
@@ -417,13 +447,12 @@ export default function Home() {
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center shadow-md shrink-0 mb-1 ${msg.sender === 'bot' ? 'bg-[#0B162C] text-white' : 'bg-gray-200 text-[#0B162C]'}`}>
                         {msg.sender === 'bot' ? <BotMessageSquare size={16} /> : <User size={16} />}
                       </div>
-                      <div className={`p-4 md:p-5 rounded-2xl text-[15px] leading-relaxed max-w-[85%] md:max-w-[75%] shadow-sm ${msg.sender === 'bot' ? 'bg-white text-[#0B162C] border border-gray-200 rounded-bl-sm' : 'bg-[#0B162C] text-white rounded-br-sm'}`}>
+                      <div className={`p-4 md:p-5 rounded-2xl text-[15px] leading-relaxed max-w-[85%] md:max-w-[75%] shadow-sm whitespace-pre-wrap ${msg.sender === 'bot' ? 'bg-white text-[#0B162C] border border-gray-200 rounded-bl-sm' : 'bg-[#0B162C] text-white rounded-br-sm'}`}>
                         {msg.text}
                       </div>
                     </div>
                   )}
 
-                  {/* IMPORTANTE: Los botones se ocultan si el bot está haciendo una pregunta forzada (step 99) */}
                   {msg.isOptions && msg.optionsData && step !== 99 && (
                     <div className="ml-11 mt-2 flex flex-col gap-2 w-[85%] md:w-[60%]">
                       {msg.optionsData.map((opt: any) => {
@@ -435,13 +464,16 @@ export default function Home() {
                             onClick={() => handleOptionClick(msg.optionsType!, opt)}
                             className={`flex items-center justify-between w-full p-3 md:p-4 bg-white border rounded-xl transition-all shadow-sm text-sm md:text-base text-left group
                               ${opt.isEspecial ? 'border-blue-200 text-blue-700 bg-blue-50/30 hover:bg-blue-600 hover:text-white hover:border-transparent' : 
-                                ['feedbackOpcion', 'explorarMas', 'tipoContacto'].includes(msg.optionsType!) 
+                                ['feedbackOpcion', 'explorarMas', 'tipoContacto', 'rifaOpcion'].includes(msg.optionsType!) 
                                 ? 'border-[#0B162C]/20 text-[#0B162C] hover:bg-slate-100' 
                                 : 'border-[#0B162C]/20 hover:bg-[#0B162C] hover:text-white text-[#0B162C]'
                               }`}
                           >
                             <span className="font-semibold">{opt.nombre}</span>
-                            <IconComponent size={18} className={`${opt.isEspecial ? 'text-blue-500 group-hover:text-white' : 'text-[#0B162C]/50 group-hover:text-white'} transition-colors`} />
+                            {/* Ocultamos el icono en las opciones de rifa y feedback para que se vea más limpio */}
+                            {['feedbackOpcion', 'explorarMas', 'tipoContacto', 'rifaOpcion'].includes(msg.optionsType!) ? null : 
+                              <IconComponent size={18} className={`${opt.isEspecial ? 'text-blue-500 group-hover:text-white' : 'text-[#0B162C]/50 group-hover:text-white'} transition-colors`} />
+                            }
                           </button>
                         );
                       })}
@@ -491,7 +523,7 @@ export default function Home() {
                   onChange={(e) => setInputValue(e.target.value)}
                   onKeyDown={handleKeyDown}
                   disabled={isInputDisabled}
-                  placeholder={isInputDisabled ? (step === 11 ? "Conversación finalizada" : "Selecciona una opción arriba...") : "Escribe tu respuesta aquí..."} 
+                  placeholder={isInputDisabled ? (step === 12 ? "Conversación finalizada" : "Selecciona una opción arriba...") : "Escribe tu respuesta aquí..."} 
                   className="flex-grow bg-transparent px-4 py-2.5 text-sm md:text-base text-[#0B162C] placeholder:text-gray-500 focus:outline-none disabled:opacity-50"
                 />
                 <button 
