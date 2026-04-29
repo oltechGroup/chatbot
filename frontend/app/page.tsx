@@ -20,7 +20,7 @@ type Message = {
 
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([
-    { id: 1, sender: 'bot', text: '¡Hola! Bienvenido al asistente virtual de OMMA Group. 👋 ¿Cómo te llamas?' }
+    { id: 1, sender: 'bot', text: '¡Hola! Bienvenido al asistente virtual de OMMA GROUP. Aquí podrás consultar nuestros catálogos exclusivos y técnicas quirúrgicas para profesionales de la salud.\n\nPara comenzar, ¿me podrías proporcionar tu(s) nombre(s)?' }
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -28,6 +28,9 @@ export default function Home() {
   const [step, setStep] = useState(0); 
   const [visitanteId, setVisitanteId] = useState<number | null>(null);
   
+  // NUEVO: Variables temporales para el nombre completo
+  const [nombresTemp, setNombresTemp] = useState('');
+
   const [tipoContactoSeleccionado, setTipoContactoSeleccionado] = useState<'telefono' | 'email' | null>(null);
   
   const [tieneDatosContacto, setTieneDatosContacto] = useState<boolean>(false);
@@ -38,6 +41,29 @@ export default function Home() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isTyping]);
+
+  // Función para formatear el texto y convertir **negritas** a <strong>HTML</strong>
+  const renderFormattedText = (text: string) => {
+    const parts = text.split(/(\*\*.*?\*\*)/g);
+    return parts.map((part, index) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return <strong key={index} className="font-bold text-[#0B162C]">{part.slice(2, -2)}</strong>;
+      }
+      return part;
+    });
+  };
+
+  // Funciones de validación
+  const isValidEmail = (email: string) => {
+    const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return regex.test(email);
+  };
+
+  const isValidPhone = (phone: string) => {
+    // Busca al menos 10 números en el string (permite espacios, guiones o símbolos como +)
+    const numbersOnly = phone.replace(/\D/g, '');
+    return numbersOnly.length >= 10;
+  };
 
   const fetchCategorias = async () => {
     setIsTyping(true);
@@ -79,26 +105,42 @@ export default function Home() {
     setIsTyping(true);
 
     try {
+      // --- PASO 0: Guardamos Nombres Temporalmente ---
       if (step === 0) {
-        const response = await chatbotService.registrarNombre(userText);
+        setNombresTemp(userText);
+        setStep(0.5); // Medio paso para pedir apellidos
+        setTimeout(() => {
+          setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: `Perfecto. Ahora, ¿me podrías proporcionar tus apellidos?` }]);
+          setIsTyping(false);
+        }, 1000);
+      } 
+      
+      // --- PASO 0.5: Juntamos y Mandamos a BD ---
+      else if (step === 0.5) {
+        const nombreCompleto = `${nombresTemp} ${userText}`;
+        const response = await chatbotService.registrarNombre(nombreCompleto);
         setVisitanteId(response.visitante.id);
         setStep(1);
         setTimeout(() => {
-          setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: `¡Mucho gusto, ${userText}! Para completar tu registro, ¿de qué país nos visitas?` }]);
+          setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: `¡Mucho gusto, ${nombresTemp}! Para completar tu registro, ¿De qué país nos visitas?` }]);
           setIsTyping(false);
         }, 1000);
-      } else if (step === 1) {
+      } 
+      
+      else if (step === 1) {
         if (visitanteId) await chatbotService.actualizarDatos(visitanteId, { pais: userText });
         setStep(2);
         setTimeout(() => {
           setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: `Gracias. ¿Podrías indicarnos tu Código Postal? (Escribe "No" si lo prefieres)` }]);
           setIsTyping(false);
         }, 1000);
-      } else if (step === 2) {
+      } 
+      
+      else if (step === 2) {
         if (userText.toLowerCase().includes('no')) {
           setStep(3);
           setTimeout(() => {
-            setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: `No te preocupes, ¿en qué ciudad resides?` }]);
+            setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: `No te preocupes, ¿En qué ciudad resides?` }]);
             setIsTyping(false);
           }, 1000);
         } else {
@@ -106,27 +148,76 @@ export default function Home() {
           setStep(4);
           preguntaContacto();
         }
-      } else if (step === 3) {
+      } 
+      
+      else if (step === 3) {
         if (visitanteId) await chatbotService.actualizarDatos(visitanteId, { ciudad: userText });
         setStep(4);
         preguntaContacto();
-      } else if (step === 5) {
-        if (visitanteId && tipoContactoSeleccionado) {
-          if (tipoContactoSeleccionado === 'email') {
-            await chatbotService.actualizarDatos(visitanteId, { email: userText });
-          } else {
-            await chatbotService.actualizarDatos(visitanteId, { telefono: userText });
+      } 
+      
+      else if (step === 5) {
+        // --- VALIDACIONES DE CONTACTO NORMAL ---
+        if (tipoContactoSeleccionado === 'email') {
+          if (!isValidEmail(userText)) {
+            setTimeout(() => {
+              setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: `Ese formato no parece un correo electrónico válido. 😅 Por favor, inténtalo de nuevo (ejemplo: correo@dominio.com):` }]);
+              setIsTyping(false);
+            }, 1000);
+            return; // Detenemos aquí
           }
-          setTieneDatosContacto(true); 
+          if (visitanteId) await chatbotService.actualizarDatos(visitanteId, { email: userText });
+        } 
+        else if (tipoContactoSeleccionado === 'telefono') {
+          if (!isValidPhone(userText)) {
+            setTimeout(() => {
+              setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: `Ese no parece un número de teléfono válido. 😅 Por favor, ingresa al menos 10 dígitos:` }]);
+              setIsTyping(false);
+            }, 1000);
+            return; // Detenemos aquí
+          }
+          if (visitanteId) await chatbotService.actualizarDatos(visitanteId, { telefono: userText });
         }
+
+        setTieneDatosContacto(true); 
         setTimeout(() => {
           setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: `¡Registro completado exitosamente! 🎉` }]);
           fetchCategorias();
         }, 1000);
       } 
       
+      // --- PASO 99: RESCATE DE CONTACTO (Filtro Estricto) ---
       else if (step === 99 && solicitudPendiente) {
-        const datoEnviado = userText.includes('@') ? { email: userText } : { telefono: userText };
+        const isEmail = userText.includes('@');
+        let isValid = false;
+        let mensajeError = "";
+
+        // Si intentan evadir (escriben no, despues, etc) o la entrada es muy corta
+        if (userText.toLowerCase() === 'no' || userText.length < 5) {
+           mensajeError = `Entiendo, pero para procesar tu solicitud de **${solicitudPendiente.nombre.toLowerCase()}** es indispensable contar con un medio de contacto. ¿Podrías brindarme un teléfono o correo?`;
+        } 
+        // Verificamos si parece correo
+        else if (isEmail) {
+           isValid = isValidEmail(userText);
+           if(!isValid) mensajeError = "Ese correo no parece válido. Por favor, verifica el formato.";
+        } 
+        // Verificamos si parece teléfono
+        else {
+           isValid = isValidPhone(userText);
+           if(!isValid) mensajeError = "Ese teléfono no parece válido. Por favor, asegúrate de escribir al menos 10 dígitos.";
+        }
+
+        // Si falló la validación
+        if (!isValid) {
+            setTimeout(() => {
+              setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: mensajeError }]);
+              setIsTyping(false);
+            }, 1000);
+            return; // No avanzamos
+        }
+
+        // Si pasó la validación, guardamos
+        const datoEnviado = isEmail ? { email: userText } : { telefono: userText };
         
         if (visitanteId) {
           await chatbotService.actualizarDatos(visitanteId, datoEnviado);
@@ -147,7 +238,7 @@ export default function Home() {
             setMessages(prev => [...prev, { 
               id: Date.now(), 
               sender: 'bot', 
-              text: `Mientras tanto, ¿te gustaría explorar nuestra área de productos?`,
+              text: `Mientras tanto, ¿Te gustaría explorar nuestra área de productos?`,
               isOptions: true,
               optionsType: 'explorarMas',
               optionsData: [{ id: 'si', nombre: 'Sí, explorar productos' }, { id: 'no', nombre: 'No por el momento' }]
@@ -160,7 +251,7 @@ export default function Home() {
       else if (step === 10) {
         if (visitanteId) await chatbotService.actualizarDatos(visitanteId, { comentario: userText });
         
-        setStep(11); // Vamos a la pregunta de la Rifa
+        setStep(11); 
         setTimeout(() => {
           setMessages(prev => [...prev, { 
             id: Date.now(), 
@@ -212,7 +303,7 @@ export default function Home() {
             setMessages(prev => [...prev, { 
               id: Date.now(), 
               sender: 'bot', 
-              text: `Me encantaría agendar esto para ti, pero veo que no me dejaste un medio de contacto. 😅 ¿Me podrías proporcionar tu número de teléfono o correo electrónico aquí abajo?` 
+              text: `Me encantaría agendar esto para ti, pero veo que no me dejaste un medio de contacto. 😅 ¿Me podrías proporcionar un número de teléfono o correo electrónico aquí abajo?` 
             }]);
             setIsTyping(false);
           }, 1000);
@@ -229,14 +320,14 @@ export default function Home() {
             setMessages(prev => [...prev, { 
               id: Date.now(), 
               sender: 'bot', 
-              text: `✅ ¡Solicitud recibida! En breve, uno de nuestros especialistas se pondrá en contacto contigo para coordinar tu petición de **${data.nombre.toLowerCase()}**.` 
+              text: `✅ ¡Solicitud recibida! En breve, uno de nuestros especialistas se pondrá en contacto contigo para **${data.nombre.toLowerCase()}**.` 
             }]);
             
             setTimeout(() => {
               setMessages(prev => [...prev, { 
                 id: Date.now(), 
                 sender: 'bot', 
-                text: `Mientras tanto, ¿te gustaría explorar nuestra área de productos?`,
+                text: `Mientras tanto, ¿Te gustaría explorar nuestra área de productos?`,
                 isOptions: true,
                 optionsType: 'explorarMas',
                 optionsData: [{ id: 'si', nombre: 'Sí, explorar productos' }, { id: 'no', nombre: 'No por el momento' }]
@@ -355,7 +446,7 @@ export default function Home() {
           setStep(10);
           setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: `Por favor, escribe tu comentario general aquí:` }]);
         } else {
-          setStep(11); // Vamos a la pregunta de la Rifa
+          setStep(11); 
           setMessages(prev => [...prev, { 
             id: Date.now(), 
             sender: 'bot', 
@@ -369,13 +460,12 @@ export default function Home() {
       }, 1000);
     }
 
-    // --- NUEVO: LÓGICA DE LA RIFA ---
     else if (tipo === 'rifaOpcion') {
       setMessages(prev => [...prev, { id: Date.now(), sender: 'user', text: data.nombre }]);
       setIsTyping(true);
 
       setTimeout(() => {
-        setStep(12); // Fin absoluto de la conversación
+        setStep(12); 
         
         if (data.id === 'si') {
           setMessages(prev => [...prev, { 
@@ -399,8 +489,8 @@ export default function Home() {
     if (e.key === 'Enter') handleSendMessage();
   };
 
-  // Bloqueamos el input en menús, cuando terminó (12), o cuando es la pregunta de la rifa (11)
-  const isInputDisabled = isTyping || [4, 6, 7, 8, 9, 11, 12].includes(step);
+  // Bloqueamos el input en menús, o cuando la conversación finalizó
+  const isInputDisabled = isTyping || [0.5, 4, 6, 7, 8, 9, 11, 12].includes(step);
 
   return (
     <main className="flex min-h-screen flex-col bg-[#F8FAFC] text-gray-900 font-sans relative">
@@ -447,8 +537,9 @@ export default function Home() {
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center shadow-md shrink-0 mb-1 ${msg.sender === 'bot' ? 'bg-[#0B162C] text-white' : 'bg-gray-200 text-[#0B162C]'}`}>
                         {msg.sender === 'bot' ? <BotMessageSquare size={16} /> : <User size={16} />}
                       </div>
-                      <div className={`p-4 md:p-5 rounded-2xl text-[15px] leading-relaxed max-w-[85%] md:max-w-[75%] shadow-sm whitespace-pre-wrap ${msg.sender === 'bot' ? 'bg-white text-[#0B162C] border border-gray-200 rounded-bl-sm' : 'bg-[#0B162C] text-white rounded-br-sm'}`}>
-                        {msg.text}
+                      {/* Aquí aplicamos la función de renderizado para las negritas reales */}
+                      <div className={`p-4 md:p-5 rounded-2xl text-[15px] leading-relaxed max-w-[85%] md:max-w-[75%] shadow-sm whitespace-pre-wrap ${msg.sender === 'bot' ? 'bg-white text-[#475569] border border-gray-200 rounded-bl-sm' : 'bg-[#0B162C] text-white rounded-br-sm'}`}>
+                        {renderFormattedText(msg.text)}
                       </div>
                     </div>
                   )}
@@ -470,7 +561,6 @@ export default function Home() {
                               }`}
                           >
                             <span className="font-semibold">{opt.nombre}</span>
-                            {/* Ocultamos el icono en las opciones de rifa y feedback para que se vea más limpio */}
                             {['feedbackOpcion', 'explorarMas', 'tipoContacto', 'rifaOpcion'].includes(msg.optionsType!) ? null : 
                               <IconComponent size={18} className={`${opt.isEspecial ? 'text-blue-500 group-hover:text-white' : 'text-[#0B162C]/50 group-hover:text-white'} transition-colors`} />
                             }
