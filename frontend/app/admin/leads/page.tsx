@@ -4,17 +4,22 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { LogOut, Loader2, ArrowLeft, Search, User, MapPin, Mail, Phone, FileText, MessageSquareQuote, Calendar, LayoutDashboard, ListOrdered } from 'lucide-react';
+import { LogOut, Loader2, ArrowLeft, Search, User, MapPin, Mail, Phone, FileText, MessageSquareQuote, Calendar, LayoutDashboard, ListOrdered, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { adminService } from '../../services/api';
 
 export default function LeadsDetail() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false); // Nuevo estado para el botón de actualizar
   const [leads, setLeads] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Nuevo estado para la paginación
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10; // Cantidad de registros por página
 
-  useEffect(() => {
+  const fetchLeads = async (isManualRefresh = false) => {
     const token = sessionStorage.getItem('omma_admin_token');
     
     if (!token) {
@@ -22,21 +27,29 @@ export default function LeadsDetail() {
       return;
     }
 
-    const fetchLeads = async () => {
-      try {
-        const data = await adminService.getLeadsDetails(token);
-        setLeads(data);
-      } catch (error) {
-        console.error("Error al obtener detalle de leads", error);
-        sessionStorage.removeItem('omma_admin_token');
-        router.push('/admin/login');
-      } finally {
-        setIsLoading(false);
-      }
-    };
+    if (isManualRefresh) setIsRefreshing(true);
 
+    try {
+      const data = await adminService.getLeadsDetails(token);
+      setLeads(data);
+    } catch (error) {
+      console.error("Error al obtener detalle de leads", error);
+      sessionStorage.removeItem('omma_admin_token');
+      router.push('/admin/login');
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
     fetchLeads();
   }, [router]);
+
+  // Si el usuario busca algo, lo regresamos a la página 1 para que vea los resultados
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
 
   const handleLogout = () => {
     sessionStorage.removeItem('omma_admin_token');
@@ -49,16 +62,14 @@ export default function LeadsDetail() {
       acc[lead.visitante_id] = {
         ...lead,
         productos_descargados: [],
-        solicitudes_especiales: [] // Nueva bolsita para citas y talleres
+        solicitudes_especiales: [] 
       };
     }
     
-    // Si la fila actual trae un catálogo, lo metemos a su bolsita
     if (lead.producto_descargado && !acc[lead.visitante_id].productos_descargados.includes(lead.producto_descargado)) {
       acc[lead.visitante_id].productos_descargados.push(lead.producto_descargado);
     }
 
-    // Si la fila actual trae una acción especial, la metemos a su bolsita
     if (lead.tipo_accion && ['AGENDAR_TALLER', 'AGENDAR_CITA', 'SOPORTE_TELEFONICO'].includes(lead.tipo_accion)) {
       if (!acc[lead.visitante_id].solicitudes_especiales.includes(lead.tipo_accion)) {
         acc[lead.visitante_id].solicitudes_especiales.push(lead.tipo_accion);
@@ -82,6 +93,13 @@ export default function LeadsDetail() {
 
     return matchesName || matchesEmail || matchesPais || matchesProducto || matchesEspecial;
   });
+
+  // 3. LÓGICA DE PAGINACIÓN
+  const totalPages = Math.ceil(filteredLeads.length / itemsPerPage);
+  const paginatedLeads = filteredLeads.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
 
   // Formateador de fechas
   const formatDate = (dateString: string) => {
@@ -116,7 +134,6 @@ export default function LeadsDetail() {
     <main className="min-h-screen bg-[#F8FAFC] font-sans pb-12">
       {/* CABECERA RESPONSIVA INTELIGENTE */}
       <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
-        {/* Fila 1: Logo y Cerrar Sesión (Siempre visibles arriba) */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
           <div className="flex items-center gap-6">
             <div className="relative w-[150px] h-[45px] md:w-[180px] md:h-[50px]">
@@ -130,7 +147,6 @@ export default function LeadsDetail() {
               />
             </div>
             
-            {/* Navegación Desktop (Oculta en móvil) */}
             <div className="hidden md:flex items-center gap-4 border-l border-gray-200 pl-6">
               <button 
                 onClick={() => router.push('/admin/dashboard')}
@@ -155,7 +171,6 @@ export default function LeadsDetail() {
           </button>
         </div>
 
-        {/* Fila 2: Sub-menú Móvil (Solo visible en celulares) */}
         <div className="md:hidden bg-slate-50 border-t border-gray-100 px-4 py-3 flex gap-2">
           <button 
             onClick={() => router.push('/admin/dashboard')}
@@ -171,21 +186,34 @@ export default function LeadsDetail() {
 
       <div className="max-w-[95%] mx-auto mt-6 md:mt-8 space-y-6">
         
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col md:flex-row justify-between items-end gap-4">
-          <div className="w-full md:w-auto">
-            <h1 className="text-2xl md:text-3xl font-black text-[#0B162C]">Base de Datos de Prospectos</h1>
-            <p className="text-gray-500 mt-1 text-sm md:text-base">Lista completa agrupada por visitante y sus interacciones con el catálogo.</p>
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-4">
+          <div className="w-full lg:w-auto flex justify-between items-start">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-black text-[#0B162C]">Base de Datos de Prospectos</h1>
+              <p className="text-gray-500 mt-1 text-sm md:text-base">Lista completa agrupada por visitante y sus interacciones con el catálogo.</p>
+            </div>
           </div>
           
-          <div className="w-full md:w-96 relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-            <input 
-              type="text" 
-              placeholder="Buscar por nombre, correo, país o producto..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-12 pr-4 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0B162C] shadow-sm transition-shadow"
-            />
+          <div className="w-full lg:w-auto flex gap-3">
+            <div className="relative flex-grow lg:w-80">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+              <input 
+                type="text" 
+                placeholder="Buscar por nombre, correo, país o producto..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-12 pr-4 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0B162C] shadow-sm transition-shadow"
+              />
+            </div>
+            {/* BOTÓN DE ACTUALIZAR */}
+            <button 
+              onClick={() => fetchLeads(true)}
+              disabled={isRefreshing}
+              className="flex-shrink-0 flex items-center justify-center w-[50px] h-[50px] bg-white border border-gray-200 rounded-xl text-[#0B162C] hover:bg-slate-50 transition-colors shadow-sm disabled:opacity-50"
+              title="Actualizar datos"
+            >
+              <RefreshCw size={20} className={isRefreshing ? "animate-spin text-blue-600" : ""} />
+            </button>
           </div>
         </motion.div>
 
@@ -203,8 +231,8 @@ export default function LeadsDetail() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 text-sm">
-                {filteredLeads.length > 0 ? (
-                  filteredLeads.map((lead: any, idx: number) => (
+                {paginatedLeads.length > 0 ? (
+                  paginatedLeads.map((lead: any, idx: number) => (
                     <tr key={idx} className="hover:bg-slate-50 transition-colors">
                       <td className="p-4 font-bold text-[#0B162C] whitespace-nowrap">
                         {lead.visitante_nombre}
@@ -219,11 +247,8 @@ export default function LeadsDetail() {
                         {!lead.email && !lead.telefono && <span className="text-gray-400 italic">No proporcionado</span>}
                       </td>
                       
-                      {/* COLUMNA DE INTERESES (Combina PDFs y Solicitudes) */}
                       <td className="p-4 min-w-[250px]">
                         <div className="flex flex-col gap-2">
-                          
-                          {/* 1. Dibujamos las Solicitudes Especiales (Naranjas) */}
                           {lead.solicitudes_especiales?.length > 0 && (
                             <div className="flex flex-wrap gap-2">
                               {lead.solicitudes_especiales.map((sol: string, i: number) => (
@@ -234,7 +259,6 @@ export default function LeadsDetail() {
                             </div>
                           )}
 
-                          {/* 2. Dibujamos los PDFs Descargados (Azules) */}
                           {lead.productos_descargados?.length > 0 && (
                             <div className="flex flex-wrap gap-2">
                               {lead.productos_descargados.map((prod: string, i: number) => (
@@ -245,11 +269,9 @@ export default function LeadsDetail() {
                             </div>
                           )}
 
-                          {/* 3. Si no hizo nada de lo anterior */}
                           {lead.productos_descargados?.length === 0 && lead.solicitudes_especiales?.length === 0 && (
                             <span className="w-fit text-gray-400 italic bg-gray-100 px-2.5 py-1 rounded-full text-[11px]">Solo navegó por el menú</span>
                           )}
-
                         </div>
                       </td>
 
@@ -271,6 +293,63 @@ export default function LeadsDetail() {
               </tbody>
             </table>
           </div>
+          
+          {/* CONTROLES DE PAGINACIÓN */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between border-t border-gray-200 bg-gray-50 px-4 py-3 sm:px-6">
+              <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm text-gray-700">
+                    Mostrando <span className="font-bold text-[#0B162C]">{((currentPage - 1) * itemsPerPage) + 1}</span> a <span className="font-bold text-[#0B162C]">{Math.min(currentPage * itemsPerPage, filteredLeads.length)}</span> de <span className="font-bold text-[#0B162C]">{filteredLeads.length}</span> resultados
+                  </p>
+                </div>
+                <div>
+                  <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
+                    <button
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      className="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-100 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:hover:bg-transparent transition-colors"
+                    >
+                      <span className="sr-only">Anterior</span>
+                      <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+                    </button>
+                    <span className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-gray-700 ring-1 ring-inset ring-gray-300 focus:outline-offset-0">
+                      Página {currentPage} de {totalPages}
+                    </span>
+                    <button
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                      className="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-100 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:hover:bg-transparent transition-colors"
+                    >
+                      <span className="sr-only">Siguiente</span>
+                      <ChevronRight className="h-5 w-5" aria-hidden="true" />
+                    </button>
+                  </nav>
+                </div>
+              </div>
+              
+              {/* Paginación versión móvil (simplificada) */}
+              <div className="flex flex-1 justify-between sm:hidden">
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="relative inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Anterior
+                </button>
+                <span className="flex items-center text-sm font-semibold text-gray-700">
+                  {currentPage} / {totalPages}
+                </span>
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="relative ml-3 inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Siguiente
+                </button>
+              </div>
+            </div>
+          )}
         </motion.div>
 
       </div>
