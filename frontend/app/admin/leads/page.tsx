@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { LogOut, Loader2, ArrowLeft, Search, User, MapPin, Mail, Phone, FileText, MessageSquareQuote, Calendar } from 'lucide-react';
+import { LogOut, Loader2, ArrowLeft, Search, User, MapPin, Mail, Phone, FileText, MessageSquareQuote, Calendar, LayoutDashboard, ListOrdered } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { adminService } from '../../services/api';
 
@@ -114,9 +114,10 @@ export default function LeadsDetail() {
 
   return (
     <main className="min-h-screen bg-[#F8FAFC] font-sans pb-12">
+      {/* CABECERA RESPONSIVA INTELIGENTE */}
       <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
+        {/* Fila 1: Logo y Cerrar Sesión (Siempre visibles arriba) */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-          
           <div className="flex items-center gap-6">
             <div className="relative w-[150px] h-[45px] md:w-[180px] md:h-[50px]">
               <Image 
@@ -129,6 +130,7 @@ export default function LeadsDetail() {
               />
             </div>
             
+            {/* Navegación Desktop (Oculta en móvil) */}
             <div className="hidden md:flex items-center gap-4 border-l border-gray-200 pl-6">
               <button 
                 onClick={() => router.push('/admin/dashboard')}
@@ -145,20 +147,34 @@ export default function LeadsDetail() {
 
           <button 
             onClick={handleLogout}
-            className="flex items-center gap-2 text-sm font-bold text-red-500 hover:text-red-700 hover:bg-red-50 px-4 py-2 rounded-lg transition-colors"
+            className="flex items-center gap-2 text-sm font-bold text-red-500 hover:text-red-700 hover:bg-red-50 p-2 md:px-4 md:py-2 rounded-lg transition-colors"
+            title="Cerrar Sesión"
           >
-            <LogOut size={18} />
+            <LogOut size={20} />
             <span className="hidden md:inline">Cerrar Sesión</span>
+          </button>
+        </div>
+
+        {/* Fila 2: Sub-menú Móvil (Solo visible en celulares) */}
+        <div className="md:hidden bg-slate-50 border-t border-gray-100 px-4 py-3 flex gap-2">
+          <button 
+            onClick={() => router.push('/admin/dashboard')}
+            className="flex-1 flex justify-center items-center gap-2 text-[13px] font-semibold text-gray-500 bg-white border border-transparent py-2 rounded-lg hover:bg-gray-100 transition-colors"
+          >
+            <LayoutDashboard size={16} /> Resumen
+          </button>
+          <button className="flex-1 flex justify-center items-center gap-2 text-[13px] font-bold text-[#0B162C] bg-white border border-gray-200 py-2 rounded-lg shadow-sm">
+            <ListOrdered size={16} /> Detalles
           </button>
         </div>
       </header>
 
-      <div className="max-w-[95%] mx-auto mt-8 space-y-6">
+      <div className="max-w-[95%] mx-auto mt-6 md:mt-8 space-y-6">
         
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col md:flex-row justify-between items-end gap-4">
-          <div>
-            <h1 className="text-3xl font-black text-[#0B162C]">Base de Datos de Prospectos</h1>
-            <p className="text-gray-500 mt-1">Lista completa agrupada por visitante y sus interacciones con el catálogo.</p>
+          <div className="w-full md:w-auto">
+            <h1 className="text-2xl md:text-3xl font-black text-[#0B162C]">Base de Datos de Prospectos</h1>
+            <p className="text-gray-500 mt-1 text-sm md:text-base">Lista completa agrupada por visitante y sus interacciones con el catálogo.</p>
           </div>
           
           <div className="w-full md:w-96 relative">
