@@ -20,7 +20,7 @@ type Message = {
 
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([
-    { id: 1, sender: 'bot', text: '¡Hola! Bienvenido al asistente virtual de OMMA GROUP. Aquí podrás consultar nuestros catálogos exclusivos y técnicas quirúrgicas para profesionales de la salud.\n\nPara comenzar, ¿me podrías proporcionar tu(s) nombre(s)?' }
+    { id: 1, sender: 'bot', text: '¡Hola! Bienvenido al asistente virtual de OMMA GROUP. Aquí podrás consultar nuestros catálogos exclusivos y técnicas quirúrgicas para profesionales de la salud.\n\nPara comenzar, ¿Me podrías proporcionar tu(s) nombre(s)?' }
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -105,7 +105,7 @@ export default function Home() {
         setNombresTemp(userText);
         setStep(0.5); 
         setTimeout(() => {
-          setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: `Perfecto. Ahora, ¿me podrías proporcionar tus apellidos?` }]);
+          setMessages(prev => [...prev, { id: Date.now(), sender: 'bot', text: `Perfecto. Ahora, ¿Me podrías proporcionar tus apellidos?` }]);
           setIsTyping(false);
         }, 1000);
       } 
